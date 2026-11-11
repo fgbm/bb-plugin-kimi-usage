@@ -169,6 +169,26 @@ function formatReport(rows: readonly CliRow[]): string {
   return rows.flatMap(formatHostBlock).join("\n");
 }
 
+/** ACP provider that owns the Kimi Code subscription. The usage row is only
+ * meaningful when that provider is part of this bb, so the plugin advertises no
+ * resource without it. */
+const ACP_PROVIDER_ID = "acp-kimi-code";
+
+async function acpProviderReady(bb: BbPluginApi): Promise<boolean> {
+  try {
+    const catalog = await bb.sdk.providers.catalog();
+    const entry = catalog.find((candidate) => candidate.id === ACP_PROVIDER_ID);
+    return (
+      entry !== undefined &&
+      entry.enabled &&
+      entry.pluginEnabled &&
+      entry.available
+    );
+  } catch {
+    return false;
+  }
+}
+
 export default async function plugin(bb: BbPluginApi) {
   const hostClient = bb.hosts.experimental_client({ contract: hostContract });
 
@@ -246,19 +266,31 @@ export default async function plugin(bb: BbPluginApi) {
     usageRpc,
     {
       "provider-usage.v1.listResources": async () => {
+        if (!(await acpProviderReady(bb))) return { resources: [] };
         const hosts = await connectedHosts();
-        return {
-          resources: hosts.map((host) => ({
-            accountKey: null,
-            id: `${RESOURCE_PREFIX}${host.id}`,
-            providerId: PROVIDER_ID,
-            label: "Kimi Code",
-            scope: {
-              kind: "host" as const,
-              hostId: host.id,
-              hostName: host.name,
-            },
+        // A host whose Kimi Code login is gone has nothing to meter: bb already
+        // reports the provider's auth state, and an "expired" row here would
+        // only repeat it.
+        const measured = await Promise.all(
+          hosts.map(async (host) => ({
+            host,
+            usage: (await collectForHost(host.id, false)).usage,
           })),
+        );
+        return {
+          resources: measured
+            .filter((entry) => entry.usage.status === "ok")
+            .map(({ host }) => ({
+              accountKey: null,
+              id: `${RESOURCE_PREFIX}${host.id}`,
+              providerId: PROVIDER_ID,
+              label: "Kimi Code",
+              scope: {
+                kind: "host" as const,
+                hostId: host.id,
+                hostName: host.name,
+              },
+            })),
         };
       },
       "provider-usage.v1.getResource": async ({ resourceId, refresh }) => {
