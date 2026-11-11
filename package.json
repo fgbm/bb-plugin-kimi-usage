@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-kimi-usage",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -8,7 +8,14 @@
     "url": "git+https://github.com/fgbm/bb-plugin-kimi-usage.git"
   },
   "homepage": "https://github.com/fgbm/bb-plugin-kimi-usage",
-  "keywords": ["bb-plugin", "bb", "kimi", "kimi-code", "usage", "limits"],
+  "keywords": [
+    "bb-plugin",
+    "bb",
+    "kimi",
+    "kimi-code",
+    "usage",
+    "limits"
+  ],
   "engines": {
     "bb": ">=0.49",
     "bbPluginSdk": ">=0.6.132"
@@ -21,7 +28,9 @@
     },
     "server": "./server.ts",
     "host": "./host.ts",
-    "skills": ["skills"]
+    "skills": [
+      "skills"
+    ]
   },
   "dependencies": {
     "zod": "^4.6.5"
@@ -32,4 +41,3 @@
     "typescript": "^5.7.0"
   }
 }
-
