@@ -1,0 +1,35 @@
+{
+  "name": "bb-plugin-kimi-usage",
+  "version": "0.2.0",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fgbm/bb-plugin-kimi-usage.git"
+  },
+  "homepage": "https://github.com/fgbm/bb-plugin-kimi-usage",
+  "keywords": ["bb-plugin", "bb", "kimi", "kimi-code", "usage", "limits"],
+  "engines": {
+    "bb": ">=0.49",
+    "bbPluginSdk": ">=0.6.132"
+  },
+  "bb": {
+    "name": "Kimi Usage",
+    "description": "Shows Kimi Code plan limits (5-hour and monthly windows) in BB's Provider usage view.",
+    "branding": {
+      "icon": "ChartColumn"
+    },
+    "server": "./server.ts",
+    "host": "./host.ts",
+    "skills": ["skills"]
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.132",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
+
