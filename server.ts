@@ -117,6 +117,58 @@ function notMeasured(
   return { status, plan: emptyPlan(), accountEmail: null, planLabel: null };
 }
 
+type UsageWindow = z.infer<typeof usageWindowSchema>;
+
+/** One host's answer, as the CLI prints it and as --json emits it. */
+interface CliRow {
+  host: string;
+  hostId: string;
+  observedAt: number | null;
+  usage: Usage;
+}
+
+interface CliOptions {
+  json: boolean;
+  only: string | undefined;
+}
+
+function parseCliArgs(argv: readonly string[]): CliOptions {
+  const index = argv.indexOf("--host");
+  return {
+    json: argv.includes("--json"),
+    only: index >= 0 ? argv[index + 1] : undefined,
+  };
+}
+
+function formatHeader(row: CliRow): string {
+  const plan =
+    row.usage.status === "ok" && row.usage.planLabel !== null
+      ? ` [${row.usage.planLabel}]`
+      : "";
+  return `${row.host} (${row.hostId})${plan}`;
+}
+
+function formatWindow(window: UsageWindow): string {
+  const reset =
+    window.resetsAt === null
+      ? "no reset reported"
+      : `resets ${window.resetsAt}`;
+  return `  ${window.label}: ${String(window.usedPercent)}% used, ${reset}`;
+}
+
+/** Header plus either the status line or the measured windows, in print order. */
+function formatHostBlock(row: CliRow): string[] {
+  if (row.usage.status !== "ok") {
+    return [formatHeader(row), `  ${row.usage.status}`];
+  }
+  return [formatHeader(row), ...row.usage.windows.map(formatWindow)];
+}
+
+function formatReport(rows: readonly CliRow[]): string {
+  if (rows.length === 0) return "No connected hosts.";
+  return rows.flatMap(formatHostBlock).join("\n");
+}
+
 export default async function plugin(bb: BbPluginApi) {
   const hostClient = bb.hosts.experimental_client({ contract: hostContract });
 
@@ -225,6 +277,18 @@ export default async function plugin(bb: BbPluginApi) {
     },
   );
 
+  async function collectRows(only: string | undefined): Promise<CliRow[]> {
+    const hosts = await connectedHosts();
+    const targets =
+      only === undefined ? hosts : hosts.filter((host) => host.id === only);
+    const rows: CliRow[] = [];
+    for (const host of targets) {
+      const { observedAt, usage } = await collectForHost(host.id, true);
+      rows.push({ host: host.name, hostId: host.id, observedAt, usage });
+    }
+    return rows;
+  }
+
   // `bb kimi-usage` prints the same numbers from a terminal.
   bb.cli.register({
     name: "kimi-usage",
@@ -237,45 +301,12 @@ export default async function plugin(bb: BbPluginApi) {
       },
     ],
     async run(argv) {
-      const json = argv.includes("--json");
-      const hostIndex = argv.indexOf("--host");
-      const only = hostIndex >= 0 ? argv[hostIndex + 1] : undefined;
-      const hosts = await connectedHosts();
-      const targets =
-        only === undefined ? hosts : hosts.filter((host) => host.id === only);
-      const rows = [];
-      for (const host of targets) {
-        const { observedAt, usage } = await collectForHost(host.id, true);
-        rows.push({ host: host.name, hostId: host.id, observedAt, usage });
-      }
+      const { json, only } = parseCliArgs(argv);
+      const rows = await collectRows(only);
       if (json) {
         return { exitCode: 0, stdout: JSON.stringify({ hosts: rows }, null, 2) };
       }
-      const lines: string[] = [];
-      for (const row of rows) {
-        const plan =
-          row.usage.status === "ok" && row.usage.planLabel !== null
-            ? ` [${row.usage.planLabel}]`
-            : "";
-        lines.push(`${row.host} (${row.hostId})${plan}`);
-        if (row.usage.status !== "ok") {
-          lines.push(`  ${row.usage.status}`);
-          continue;
-        }
-        for (const window of row.usage.windows) {
-          const reset =
-            window.resetsAt === null
-              ? "no reset reported"
-              : `resets ${window.resetsAt}`;
-          lines.push(
-            `  ${window.label}: ${String(window.usedPercent)}% used, ${reset}`,
-          );
-        }
-      }
-      return {
-        exitCode: 0,
-        stdout: lines.length === 0 ? "No connected hosts." : lines.join("\n"),
-      };
+      return { exitCode: 0, stdout: formatReport(rows) };
     },
   });
 }
